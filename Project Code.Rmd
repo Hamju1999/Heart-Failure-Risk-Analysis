@@ -1,0 +1,281 @@
+---
+title: "Heart Disease Analysis"
+author: "Mohammad Hamza Piracha, Ayesha Saif"
+date: "2024-11-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Initial Analysis: Model Fitting and Interpretation
+
+Response Variable: HeartDisease (Binary - 0 = No, 1 = Yes)
+
+Predictor Variables:
+
+Continuous Variables: Age, RestingBP & Cholesterol.
+
+Categorical Variables: Sex & ChestPainType.
+
+Model Specification: Logistic Regression Model For Binary Response.
+
+```{r}
+# Libraries
+library(tidyverse)
+library(caret)
+library(car)
+#library(MASS)
+library(ggplot2)
+
+# Load Data
+data <- read.csv("heart.csv")
+
+# Preprocessing Categorical Variables
+data$Sex <- as.factor(data$Sex)
+data$ChestPainType <- as.factor(data$ChestPainType)
+
+```
+
+Exploring data
+```{r}
+# Check the shape of the data
+print(paste("Shape of data: ", dim(data)))
+
+# Check for missing values in each column
+print(paste("Missing values in data: ", colSums(is.na(data)))) # Returns a count of NA values for each column
+
+# Check data types of each column
+print(paste("Data types of columns: "))
+ str(data)
+```
+For logistic regression, we focus on Age, RestingBP, Cholesterol, Sex, and ChestPainType. These variables are correctly formatted: Age, RestingBP, and Cholesterol are numeric, and Sex and ChestPainType are factors. Placeholder values in Cholesterol will be imputed as needed. This data is now ready for visualization and analysis.
+
+To better understand the distributions and identify potential outliers, we proceed with plotting histograms and boxplots for key variables. These visualizations will help us assess normality, detect any skewness, and decide if transformations or additional imputation steps are necessary to ensure the dataset is well-prepared for logistic regression analysis.
+
+```{r}
+library(gridExtra)
+# Plot histograms to visualize distributions
+p1 <- ggplot(data, aes(x=Age)) + geom_histogram(binwidth=5, fill="skyblue", color="black") + ggtitle("Age Distribution")
+p2 <- ggplot(data, aes(x=RestingBP)) + geom_histogram(binwidth=10, fill="skyblue", color="black") + ggtitle("Resting BP Distribution")
+p3 <- ggplot(data, aes(x=Cholesterol)) + geom_histogram(binwidth=10, fill="skyblue", color="black") + ggtitle("Cholesterol Distribution")
+p4 <- ggplot(data, aes(x=MaxHR)) + geom_histogram(binwidth=10, fill="skyblue", color="black") + ggtitle("MaxHR Distribution")
+
+# Arrange plots
+grid.arrange(p1, p2, p3, p4, ncol=2)
+```
+Age, RestingBP, and MaxHR: These distributions appear reasonably normal, which is a positive sign, as many regression models (like logistic regression) assume normality of predictors.
+
+```{r}
+p5 <- ggplot(data, aes(y=Age)) + geom_boxplot(fill="lightblue") + ggtitle("Age Outliers")
+p6 <- ggplot(data, aes(y=RestingBP)) + geom_boxplot(fill="lightblue") + ggtitle("Resting BP Outliers")
+p7 <- ggplot(data, aes(y=Cholesterol)) + geom_boxplot(fill="lightblue") + ggtitle("Cholesterol Outliers")
+p8 <- ggplot(data, aes(y=MaxHR)) + geom_boxplot(fill="lightblue") + ggtitle("MaxHR Outliers")
+
+grid.arrange(p5, p6, p7, p8, ncol=2)
+
+```
+```{r}
+data_copy1 <- data
+# Create a missing indicator variable
+data_copy1$Cholesterol_Missing <- ifelse(data_copy1$Cholesterol == 0, 1, 0)
+
+# Replace 0s in Cholesterol with the mean of the non-zero values
+data_copy1$Cholesterol[data_copy1$Cholesterol == 0] <- mean(data_copy1$Cholesterol[data_copy1$Cholesterol != 0], na.rm = TRUE)
+
+p_cholesterol <- ggplot(data_copy1, aes(x = Cholesterol)) +
+                 geom_histogram(binwidth = 10, fill = "skyblue", color = "black") +
+                 ggtitle("Cholesterol Distribution") +
+                 xlab("Cholesterol") +
+                 ylab("Count")
+
+# Display the plot
+print(p_cholesterol)
+```
+
+```{r}
+data_copy2 <- data
+
+data_copy2$Cholesterol_Missing <- ifelse(data_copy2$Cholesterol == 0, 1, 0)
+# Replace 0s in Cholesterol with the median of the non-zero values
+data_copy2$Cholesterol[data_copy2$Cholesterol == 0] <- median(data_copy2$Cholesterol[data_copy2$Cholesterol != 0], na.rm = TRUE)
+p_cholesterol <- ggplot(data_copy2, aes(x = Cholesterol)) +
+                 geom_histogram(binwidth = 10, fill = "skyblue", color = "black") +
+                 ggtitle("Cholesterol Distribution") +
+                 xlab("Cholesterol") +
+                 ylab("Count")
+
+# Display the plot
+print(p_cholesterol)
+```
+
+This outcome suggests that directly replacing zeros with either the mean or median might not be ideal for this dataset, as both methods result in an artificial concentration of values at the imputed point.
+```{r}
+library(mice)
+library(ggplot2)
+
+# Step 1: Replace 0 values in Cholesterol with NA
+data$Cholesterol[data$Cholesterol == 0] <- NA
+
+# Step 2: Apply Multiple Imputation using Predictive Mean Matching (pmm)
+imputed_data <- mice(data, m = 5, method = 'pmm', seed = 123)  # 'm = 5' creates 5 imputed datasets
+
+# Step 3: Complete the dataset with imputed values
+data <- complete(imputed_data)
+# Plot histograms to visualize distributions
+p_cholesterol <- ggplot(data, aes(x = Cholesterol)) +
+                 geom_histogram(binwidth = 10, fill = "skyblue", color = "black") +
+                 ggtitle("Cholesterol Distribution") +
+                 xlab("Cholesterol") +
+                 ylab("Count")
+
+# Display the plot
+print(p_cholesterol)
+```
+To address missing values in Cholesterol, we used Multiple Imputation by Chained Equations (MICE) with predictive mean matching, ensuring a realistic distribution without artificially concentrating values around the mean or median. After imputation, Cholesterol displayed slight positive skewness. However, logistic regression is robust to mild skewness in predictors, so we proceeded without further transformations, preserving the variable’s original scale for clearer interpretation.
+
+```{r}
+library(dplyr)
+library(corrplot)
+# Calculate correlation for numeric variables
+numeric_data <- data %>% dplyr::select(Age, RestingBP, Cholesterol, MaxHR, Oldpeak)
+cor_matrix <- cor(numeric_data, use="complete.obs")
+
+# Plot correlation matrix
+corrplot(cor_matrix, method="color", type="upper", addCoef.col = "black", 
+         tl.col="black", tl.srt=45, title="Correlation Matrix", mar=c(0,0,1,0))
+```
+APPLYING MODEL
+```{r}
+# Fitting Logistic Model
+logistic <- glm(HeartDisease ~ Age + RestingBP + Cholesterol + Sex + ChestPainType, data = data, family = binomial)
+
+# Summary For Statistical Significance & Interpretation
+summary(logistic)
+
+```
+
+Statistical Significance and Interpretation:
+
+
+Test for the Significance of Each Regressor: The intercept has a highly significant p-value of 2.42×10−8, indicating that the baseline log-odds of heart disease are significantly different from zero. Age is a significant predictor with a p-value of 2.20×10−8, showing that changes in age are strongly associated with variations in heart disease risk. RestingBP has a p-value of 0.2274, which is not significant, suggesting that it does not have a clear statistical effect on heart disease risk in this model. Cholesterol, however, has a significant p-value of 0.0106, indicating a meaningful relationship with heart disease. Sex (Male) is another highly significant predictor, with a p-value of 2.47×10−13, confirming its strong association with increased risk. Lastly, all chest pain types (ATA, NAP, TA) are highly significant, with p-values less than 2×10−16, meaning they are strongly associated with reducing heart disease risk compared to the baseline category.
+
+Interpretation of the Regression Coefficients: The coefficient for Age is 0.0541, meaning that for each additional year of age, the log-odds of heart disease increase by 0.0541. RestingBP has a coefficient of 0.0056, suggesting a very small increase in risk with higher resting blood pressure, though this relationship is not statistically significant. Cholesterol has a positive coefficient of 0.0039, indicating that for each unit increase in cholesterol, the log-odds of heart disease increase by 0.0039, reflecting a slight risk increase. The coefficient for Sex (Male) is 1.6230, showing that males have significantly higher log-odds of developing heart disease compared to females. Regarding chest pain types, the coefficients for ATA (-2.9211), NAP (-1.8781), and TA (-1.6510) all indicate reduced log-odds of heart disease compared to the baseline, with ATA having the largest negative impact.
+
+Goodness of Fit: The null deviance of 1262.14 indicates the total variability in the response variable when no predictors are included in the model. The residual deviance of 873.15 shows a significant reduction, meaning that the predictors collectively explain a substantial portion of the variability in heart disease outcomes. The AIC of 889.15 provides a measure of model quality, with lower values indicating a better fit. While there is room for improvement, the significant reduction in deviance and the highly significant predictors suggest that the model adequately captures the relationships between the included variables and heart disease risk.
+
+## Regression Diagnostics: Model Assumptions and Issues
+
+Autocorrelation Check:
+
+```{r}
+library(lmtest)
+dwtest(logistic)
+```
+The Durbin-Watson test gives a value of 2.0573, which is very close to 2, indicating little to no autocorrelation. The p-value of 0.8023 suggests that we fail to reject the null hypothesis of no autocorrelation. Thus, the residuals are uncorrelated, and there is no evidence of autocorrelation in the model. 
+
+Heteroscedasticity Check:
+
+```{r}
+plot(logistic$fitted.values, residuals(logistic), main = "Residuals vs. Fitted Values", xlab = "Fitted Values", ylab = "Residuals")
+abline(h = 0, col = "yellow", lty = 2)
+```
+
+The residuals vs. fitted values plot shows a noticeable pattern where the spread of residuals widens as the fitted values increase, forming a funnel shape. This indicates heteroscedasticity, meaning the variability of errors isn’t consistent across all levels of the predicted values. This can make our model’s standard errors less trustworthy and affect the accuracy of our p-values and confidence intervals.
+
+Multidisciplinary Check:
+
+```{r}
+vif(logistic)
+```
+
+The Generalized Variance Inflation Factor values are all close to 1, which is great news. This tells us that our predictors aren’t too closely related, and there’s no problematic multidisciplinary. In simple terms, each variable is contributing its own unique information to the model, so our coefficient estimates are stable and reliable.
+
+Influential Points Check:
+
+```{r}
+# Cook's Distance and leverage values
+cooksd <- cooks.distance(logistic)
+plot(cooksd, type = "h", main = "Cook's Distance", ylab = "Cook's Distance", xlab = "Observation Index")
+abline(h = 4/length(cooksd), col = "orange")
+
+# Leverage values
+lev <- hatvalues(logistic)
+plot(lev, type = "h", main = "Leverage Values", ylab = "Leverage", xlab = "Observation Index")
+abline(h = 2 * mean(lev), col = "skyblue")
+```
+
+The Cook’s Distance and leverage plots reveal that there are some data points standing out with higher values, indicating they could be influential. These points have the potential to significantly impact our model’s results, making the estimates less reliable if we don’t handle them carefully.
+
+## Remediation: Addressing Model Issues
+
+Remediating Heteroscedasticity with a Logarithmic Transformation: To deal with the varying spread of our residuals, we'll apply a log transformation which can help even out the variance, making our model's predictions more reliable and the statistical tests more accurate.
+
+```{r}
+# Log Transform on RestingBP Predictor
+data$LogRestingBP <- log1p(data$RestingBP)
+
+# Fitting The Log Transformed Model
+logtrans<- glm(HeartDisease ~ Age + LogRestingBP + Cholesterol + Sex + ChestPainType,family = binomial, data = data)
+
+# Summary Of Log Transformed Model
+summary(logtrans)
+
+# Plot For Heteroscedasticity check
+plot(logtrans$fitted.values, residuals(logtrans), main = "Residuals vs. Fitted Values (Log-Transformed)", xlab = "Fitted Values", ylab = "Residuals")
+abline(h = 0, col = "yellow", lty = 2)
+```
+
+The log transformation on RestingBP was applied to address the spread of residuals and resolve issues of inconsistent variance. However, this transformation did not make RestingBP a significant predictor in the model, as indicated by its p-value of 0.8832, meaning it had little to no impact on predicting heart disease. In contrast, variables such as Age, Cholesterol, and Sex Male continued to demonstrate strong, meaningful relationships with heart disease, with highly significant p-values of 1.87 x 10^-9, 0.00765, and 2.77 x 10^-13, respectively. Additionally, the categorical variable Chest Pain Type showed consistent and significant effects across its levels, particularly ATA, which reduced the risk substantially. 
+
+The overall model fit, measured by residual deviance 874.6 and AIC 890.6, showed no significant improvement after the transformation. 
+Removal of influential points based on Cook’s Distance and leverage values may further refine the model, potentially enhancing its predictive reliability and interpretability.
+
+
+```{r}
+# Cook's Distance & Leverage Values
+cooksd <- cooks.distance(logistic)
+lev <- hatvalues(logistic)
+
+# Threshold
+cookst <- 4 / length(cooksd)
+levt <- 2 * mean(lev)
+
+# Influential Points
+ip <- which(cooksd > cookst | lev > levt)
+ipr <- data[-ip, ]
+
+# Fitting The Log Model
+iprm <- glm(HeartDisease ~ Age + LogRestingBP + Cholesterol + Sex + ChestPainType, family = binomial, data = ipr)
+
+# Summary Of Log Model
+summary(iprm)
+
+# Plot For Influential Points Check 
+plot(cooks.distance(iprm), type = "h", main = "Cook's Distance (Influential Points Removal)", ylab = "Cook's Distance")
+abline(h = cookst, col = "orange", lty = 2)
+
+plot(hatvalues(iprm), type = "h", main = "Leverage Values (Influential Points Removal)", ylab = "Leverage")
+abline(h = levt, col = "skyblue", lty = 2)
+```
+
+The removal of influential data points flagged by Cook’s Distance and leverage values significantly improved the model's performance. The variable LogRestingBP showed a p-value of 0.0865, indicating it approached significance and may contribute to predicting heart disease. Other variables such as Age, Cholesterol, and Sex (Male) remained highly significant, with p-values of 6.47×10−10, 0.002340, and 1.00×10−13, respectively. The categorical variable Chest Pain Type (ATA and NAP) also maintained its strong, protective effects, with highly significant p-values less than 2×10−16. However, ChestPainTypeTA became insignificant, with a p-value of 0.9803, likely due to reduced influence from outliers.
+
+The model fit improved considerably after the removal of influential points, with the residual deviance dropping to 584.14 and the AIC to 600.14. These metrics indicate a more accurate and reliable model, demonstrating the importance of addressing influential points for robust predictions.
+
+
+Improvements and Remaining Limitations:
+
+After removing influential points, the model fit improved significantly (residual deviance: 584.14, AIC: 600.14), with predictors showing clearer significance. However, ChestPainTypeTA became insignificant (p=0.9803), indicating unresolved data issues or complexities. While the improved fit enhances reliability, the reduced sample size may limit generalizability. Further investigation of ChestPainTypeTA is recommended. 
+
+## Summary and Conclusions
+
+Our analysis revealed key factors associated with heart disease risk. Age emerged as a major risk factor, with older individuals having a higher likelihood of developing heart disease. Gender also plays a significant role, with men showing a notably higher risk compared to women. Cholesterol displayed a slight positive relationship with heart disease, suggesting that higher cholesterol levels may increase risk. Chest Pain Types (ATA, NAP, and TA) were strongly significant, each reducing the likelihood of heart disease compared to the baseline category. This highlights the importance of chest pain symptoms in assessing risk.
+Diagnostic checks showed issues with heteroscedasticity, where the variance of residuals was inconsistent, and influential data points that distorted the model’s stability. To address these, a log transformation was applied to RestingBP, which reduced heteroscedasticity but rendered LogRestingBP less significant. Removing influential points significantly improved the model’s stability, making LogRestingBP approach significance again and enhancing the reliability of other predictors. However, ChestPainTypeTA became insignificant, indicating potential unresolved data complexities.
+The final model is more stable and provides clearer insights into heart disease risk factors. While adjustments like point removal and transformations improved model reliability, they also reduced the sample size, potentially limiting generalization. Despite these challenges, the analysis offers a solid foundation for understanding heart disease risk and provides meaningful takeaways that could inform medical risk assessments and future research.
+
+
+## Future Analysis Recommendation
+
+While logistic regression provides a straightforward and interpretable model for predicting heart disease risk, other modeling techniques could offer additional insights or improve model robustness. For instance, Ridge Regression and Lasso Regression can help mitigate multicollinearity by adding regularization, making the model less sensitive to small fluctuations in the data. Additionally, Random Forests or Support Vector Machines (SVM) could be explored to capture non-linear relationships in the predictors. Future work could involve testing these models to assess whether they improve prediction accuracy or offer additional interpretive insights.
