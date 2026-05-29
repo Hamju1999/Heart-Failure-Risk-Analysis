@@ -58,12 +58,14 @@ most statistically significant predictors of cardiovascular disease risk.
   gridExtra, dplyr
 
 ## Repository Structure
+```
 ├── data/
 │   └── heart.csv              # 918-observation UCI aggregate dataset
 ├── Project Code.Rmd           # Full analysis - preprocessing through conclusions
 ├── Project Markdown.html      # Rendered HTML output
 ├── Heart Analyze Report.pdf   # Final report
 └── README.md
+```
 
 ## Author
 
