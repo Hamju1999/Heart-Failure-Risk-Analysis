@@ -1,5 +1,12 @@
 # Heart Failure Risk Analysis
 
+> [!WARNING]
+> **Academic Project — Not for Clinical Use**
+> This project was developed as an academic research exercise. The model has not been
+> clinically validated and must not be used for heart disease diagnosis, risk assessment,
+> or any medical decision making. Outputs are for educational and portfolio demonstration
+> purposes only.
+
 ## Overview
 
 Logistic regression analysis on the Heart Failure Prediction dataset to identify
@@ -66,6 +73,9 @@ most statistically significant predictors of cardiovascular disease risk.
 ├── Heart Analyze Report.pdf   # Final report
 └── README.md
 ```
+
+## License
+[MIT](./LICENSE) © 2024 Mohammad Hamza Piracha
 
 ## Author
 
