@@ -1,7 +1,7 @@
 # Heart Failure Risk Analysis
 
 > [!WARNING]
-> **Academic Project — Not for Clinical Use**
+> **Academic Project - Not for Clinical Use**
 > This project was developed as an academic research exercise. The model has not been
 > clinically validated and must not be used for heart disease diagnosis, risk assessment,
 > or any medical decision making. Outputs are for educational and portfolio demonstration
